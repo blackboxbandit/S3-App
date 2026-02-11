@@ -1,6 +1,6 @@
 {
   "name": "s3-client-gui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Next-Generation S3 Client GUI — Cross-platform high-performance S3 file manager",
   "main": "./out/main/index.js",
   "author": "S3 Client GUI Team",
