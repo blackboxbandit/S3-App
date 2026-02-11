@@ -43,7 +43,8 @@
     "productName": "S3 Client",
     "copyright": "Copyright © 2026 S3 Client GUI Team",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "resources"
     },
     "files": [
       "out/**/*"
@@ -57,8 +58,8 @@
       "darkModeSupport": true,
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlements": "resources/entitlements.mac.plist",
+      "entitlementsInherit": "resources/entitlements.mac.plist"
     },
     "dmg": {
       "artifactName": "${productName}-${version}-mac.${ext}"
