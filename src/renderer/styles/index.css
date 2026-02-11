@@ -2098,6 +2098,19 @@ kbd {
   color: var(--accent-warning);
 }
 
+/* Folder recursive banner */
+.storage-dialog__folder-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-xl);
+  background: rgba(99, 102, 241, 0.08);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+  font-size: 11px;
+  color: var(--accent-primary);
+  line-height: 1.4;
+}
+
 /* Glacier banner */
 .storage-dialog__glacier-banner {
   display: flex;
