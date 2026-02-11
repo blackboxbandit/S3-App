@@ -1,0 +1,41 @@
+appId: com.s3client.gui
+productName: S3 Client
+copyright: Copyright © 2026 S3 Client GUI Team
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**/*
+mac:
+  category: public.app-category.utilities
+  target:
+    - dmg
+    - zip
+  darkModeSupport: true
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+dmg:
+  artifactName: ${productName}-${version}-mac.${ext}
+win:
+  target:
+    - nsis
+    - portable
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-win-setup.${ext}
+portable:
+  artifactName: ${productName}-${version}-win-portable.${ext}
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+  maintainer: S3 Client GUI Team
+appImage:
+  artifactName: ${productName}-${version}-linux.${ext}
+deb:
+  artifactName: ${productName}-${version}-linux.${ext}
