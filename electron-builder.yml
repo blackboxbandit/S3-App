@@ -39,3 +39,9 @@ appImage:
   artifactName: ${productName}-${version}-linux.${ext}
 deb:
   artifactName: ${productName}-${version}-linux.${ext}
+
+publish:
+  provider: github
+  owner: blackboxbandit
+  repo: S3-App
+  releaseType: release
