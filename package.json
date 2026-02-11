@@ -30,7 +30,7 @@
     "@types/ini": "^4.1.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.4.0",
+    "@vitejs/plugin-react": "^5.1.4",
     "electron": "^34.0.0",
     "electron-builder": "^25.1.0",
     "electron-vite": "^4.0.0",
