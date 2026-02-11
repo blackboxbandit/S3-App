@@ -6,7 +6,7 @@ out/
 dist/
 src/renderer/dist/
 release/
-build/
+
 
 # Environment variables
 .env
