@@ -12,6 +12,7 @@ const CONFIG_PATH = join(AWS_DIR, 'config')
 
 let activeProfile: AwsProfile | null = null
 let s3Client: S3Client | null = null
+const clientCache = new Map<string, S3Client>()
 
 /**
  * Parse ~/.aws/credentials and ~/.aws/config to discover named profiles.
@@ -84,6 +85,7 @@ export function loadProfiles(): AwsProfile[] {
 export function setActiveProfile(profile: AwsProfile): void {
     activeProfile = profile
     s3Client = createS3Client(profile)
+    clientCache.clear() // invalidate cached regional clients on profile switch
 }
 
 export function getActiveProfile(): AwsProfile | null {
@@ -129,7 +131,11 @@ export function createRegionalS3Client(region: string): S3Client {
     if (!activeProfile) {
         throw new Error('No active AWS profile.')
     }
-    return createS3Client(activeProfile, region)
+    const cached = clientCache.get(region)
+    if (cached) return cached
+    const client = createS3Client(activeProfile, region)
+    clientCache.set(region, client)
+    return client
 }
 
 /**

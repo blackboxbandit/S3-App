@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { S3Object, ListObjectsResult } from '../../shared/types'
 import ContextMenu from './ContextMenu'
 import DetailPanel from './DetailPanel'
@@ -48,6 +49,49 @@ function getFileTypeIcon(key: string, isFolder: boolean): string {
     return iconMap[ext] || '📄'
 }
 
+// ─── Memoized Row Component ─────────────────────────────────
+interface ObjectRowProps {
+    obj: S3Object
+    isSelected: boolean
+    prefix: string
+    onClick: (obj: S3Object, e: React.MouseEvent) => void
+    onContextMenu: (e: React.MouseEvent, obj: S3Object) => void
+    onDoubleClick: (key: string) => void
+    style?: React.CSSProperties
+}
+
+const ObjectRow = memo(function ObjectRow({ obj, isSelected, prefix, onClick, onContextMenu, onDoubleClick, style }: ObjectRowProps) {
+    return (
+        <div
+            className={`object-row ${isSelected ? 'object-row--selected' : ''}`}
+            onClick={(e) => onClick(obj, e)}
+            onContextMenu={(e) => onContextMenu(e, obj)}
+            onDoubleClick={() => obj.isFolder && onDoubleClick(obj.key)}
+            style={style}
+        >
+            <div className="object-row__name">
+                <span className={`object-row__icon ${obj.isFolder ? 'object-row__icon--folder' : 'object-row__icon--file'}`}>
+                    {getFileTypeIcon(obj.key, obj.isFolder)}
+                </span>
+                <span className="object-row__name-text">
+                    {getDisplayName(obj.key, prefix)}
+                </span>
+            </div>
+            <span className="object-row__size">{formatBytes(obj.size)}</span>
+            <span className="object-row__date">{formatDate(obj.lastModified)}</span>
+            <span className="object-row__class">
+                {obj.isFolder ? (
+                    <span className="storage-badge storage-badge--folder">Folder</span>
+                ) : obj.storageClass && (
+                    <span className={`storage-badge storage-badge--${obj.storageClass}`}>
+                        {obj.storageClass.replace(/_/g, ' ')}
+                    </span>
+                )}
+            </span>
+        </div>
+    )
+})
+
 export default function ObjectBrowser({ bucket, onError }: Props) {
     const [objects, setObjects] = useState<S3Object[]>([])
     const [prefix, setPrefix] = useState('')
@@ -56,6 +100,7 @@ export default function ObjectBrowser({ bucket, onError }: Props) {
     const [hasMore, setHasMore] = useState(false)
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [searchQuery, setSearchQuery] = useState('')
+    const [debouncedSearch, setDebouncedSearch] = useState('')
     const [isDragOver, setIsDragOver] = useState(false)
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; object: S3Object } | null>(null)
     const [viewMode, setViewMode] = useState<ViewMode>('list')
@@ -91,14 +136,34 @@ export default function ObjectBrowser({ bucket, onError }: Props) {
         }
     }, [bucket, onError])
 
+    // Debounce search input
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchQuery), 150)
+        return () => clearTimeout(timer)
+    }, [searchQuery])
+
     // Load on bucket or prefix change
     useEffect(() => {
         setObjects([])
         setSelected(new Set())
         setContinuationToken(undefined)
         setSearchQuery('')
+        setDebouncedSearch('')
         fetchObjects(prefix)
     }, [bucket, prefix, fetchObjects])
+
+    // Filter by search query (memoized)
+    const filteredObjects = useMemo(() => {
+        if (!debouncedSearch) return objects
+        const q = debouncedSearch.toLowerCase()
+        return objects.filter((o) =>
+            getDisplayName(o.key, prefix).toLowerCase().includes(q)
+        )
+    }, [objects, debouncedSearch, prefix])
+
+    // Keep a ref to filteredObjects for use in keyboard handler
+    const filteredObjectsRef = useRef(filteredObjects)
+    filteredObjectsRef.current = filteredObjects
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -115,7 +180,7 @@ export default function ObjectBrowser({ bucket, onError }: Props) {
                     setShowDetailPanel(prev => !prev)
                 } else if (e.key === 'a') {
                     e.preventDefault()
-                    setSelected(new Set(filteredObjects.map(o => o.key)))
+                    setSelected(new Set(filteredObjectsRef.current.map(o => o.key)))
                 }
             }
             if (e.key === 'Escape') {
@@ -125,7 +190,7 @@ export default function ObjectBrowser({ bucket, onError }: Props) {
         }
         window.addEventListener('keydown', handler)
         return () => window.removeEventListener('keydown', handler)
-    }, [prefix, objects])
+    }, [prefix])
 
     // Navigate into a folder
     const handleNavigate = (key: string) => {
@@ -306,12 +371,13 @@ export default function ObjectBrowser({ bucket, onError }: Props) {
         }
     }
 
-    // Filter by search query
-    const filteredObjects = searchQuery
-        ? objects.filter((o) =>
-            getDisplayName(o.key, prefix).toLowerCase().includes(searchQuery.toLowerCase())
-        )
-        : objects
+    // Virtualizer for list view
+    const virtualizer = useVirtualizer({
+        count: filteredObjects.length,
+        getScrollElement: () => listRef.current,
+        estimateSize: () => 36,
+        overscan: 20
+    })
 
     // Get currently selected object for detail panel
     const selectedKeys = Array.from(selected)
@@ -320,7 +386,10 @@ export default function ObjectBrowser({ bucket, onError }: Props) {
         : null
 
     // Get selected objects for storage class dialog
-    const selectedObjectsForDialog = objects.filter(o => selected.has(o.key))
+    const selectedObjectsForDialog = useMemo(() =>
+        objects.filter(o => selected.has(o.key)),
+        [objects, selected]
+    )
 
     return (
         <div
@@ -436,7 +505,8 @@ export default function ObjectBrowser({ bucket, onError }: Props) {
                 <div className="object-browser__main">
                     {viewMode === 'list' ? (
                         /* List View */
-                        <div className="object-table" ref={listRef} onScroll={handleScroll}>
+                        <div className="object-table" ref={listRef} onScroll={handleScroll}
+                            style={{ position: 'relative' }}>
                             <div className="object-table__header">
                                 <span className="object-table__header-cell">Name</span>
                                 <span className="object-table__header-cell">Size</span>
@@ -444,40 +514,34 @@ export default function ObjectBrowser({ bucket, onError }: Props) {
                                 <span className="object-table__header-cell">Class</span>
                             </div>
 
-                            {filteredObjects.map((obj, index) => (
-                                <div
-                                    key={obj.key}
-                                    className={`object-row ${selected.has(obj.key) ? 'object-row--selected' : ''}`}
-                                    onClick={(e) => handleRowClick(obj, e)}
-                                    onContextMenu={(e) => handleContextMenu(e, obj)}
-                                    onDoubleClick={() => obj.isFolder && handleNavigate(obj.key)}
-                                    style={{ animationDelay: `${Math.min(index * 20, 400)}ms` }}
-                                >
-                                    <div className="object-row__name">
-                                        <span className={`object-row__icon ${obj.isFolder ? 'object-row__icon--folder' : 'object-row__icon--file'}`}>
-                                            {getFileTypeIcon(obj.key, obj.isFolder)}
-                                        </span>
-                                        <span className="object-row__name-text">
-                                            {getDisplayName(obj.key, prefix)}
-                                        </span>
-                                    </div>
-                                    <span className="object-row__size">{formatBytes(obj.size)}</span>
-                                    <span className="object-row__date">{formatDate(obj.lastModified)}</span>
-                                    <span className="object-row__class">
-                                        {obj.isFolder ? (
-                                            <span className="storage-badge storage-badge--folder">Folder</span>
-                                        ) : obj.storageClass && (
-                                            <span className={`storage-badge storage-badge--${obj.storageClass}`}>
-                                                {obj.storageClass.replace(/_/g, ' ')}
-                                            </span>
-                                        )}
-                                    </span>
-                                </div>
-                            ))}
+                            <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+                                {virtualizer.getVirtualItems().map((virtualItem) => {
+                                    const obj = filteredObjects[virtualItem.index]
+                                    return (
+                                        <ObjectRow
+                                            key={obj.key}
+                                            obj={obj}
+                                            isSelected={selected.has(obj.key)}
+                                            prefix={prefix}
+                                            onClick={handleRowClick}
+                                            onContextMenu={handleContextMenu}
+                                            onDoubleClick={handleNavigate}
+                                            style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                width: '100%',
+                                                height: `${virtualItem.size}px`,
+                                                transform: `translateY(${virtualItem.start}px)`
+                                            }}
+                                        />
+                                    )
+                                })}
+                            </div>
                         </div>
                     ) : (
                         /* Grid View */
-                        <div className="object-grid" ref={listRef} onScroll={handleScroll}>
+                        <div className="object-grid" ref={viewMode === 'grid' ? listRef : undefined} onScroll={handleScroll}>
                             {filteredObjects.map((obj, index) => (
                                 <div
                                     key={obj.key}
@@ -485,7 +549,7 @@ export default function ObjectBrowser({ bucket, onError }: Props) {
                                     onClick={(e) => handleRowClick(obj, e)}
                                     onContextMenu={(e) => handleContextMenu(e, obj)}
                                     onDoubleClick={() => obj.isFolder && handleNavigate(obj.key)}
-                                    style={{ animationDelay: `${Math.min(index * 30, 600)}ms` }}
+                                    style={{ animationDelay: `${Math.min(index * 15, 300)}ms` }}
                                 >
                                     <div className="object-card__icon">
                                         {getFileTypeIcon(obj.key, obj.isFolder)}

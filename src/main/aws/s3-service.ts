@@ -153,8 +153,8 @@ export async function deleteObjects(bucket: string, keys: string[]): Promise<voi
     for (let i = 0; i < keys.length; i += 1000) {
         batches.push(keys.slice(i, i + 1000))
     }
-    for (const batch of batches) {
-        await client.send(
+    await Promise.all(batches.map(batch =>
+        client.send(
             new DeleteObjectsCommand({
                 Bucket: bucket,
                 Delete: {
@@ -163,7 +163,7 @@ export async function deleteObjects(bucket: string, keys: string[]): Promise<voi
                 }
             })
         )
-    }
+    ))
 }
 
 export async function copyObject(
@@ -284,14 +284,20 @@ export async function changeStorageClassBatch(
     targetClass: StorageClass
 ): Promise<StorageClassChangeResult> {
     const result: StorageClassChangeResult = { succeeded: 0, failed: [] }
+    const CONCURRENCY = 10
 
-    for (const key of keys) {
-        try {
-            await changeObjectStorageClass(bucket, key, targetClass)
-            result.succeeded++
-        } catch (err: any) {
-            result.failed.push({ key, error: err.message || 'Unknown error' })
-        }
+    for (let i = 0; i < keys.length; i += CONCURRENCY) {
+        const chunk = keys.slice(i, i + CONCURRENCY)
+        const settled = await Promise.allSettled(
+            chunk.map(key => changeObjectStorageClass(bucket, key, targetClass))
+        )
+        settled.forEach((outcome, idx) => {
+            if (outcome.status === 'fulfilled') {
+                result.succeeded++
+            } else {
+                result.failed.push({ key: chunk[idx], error: outcome.reason?.message || 'Unknown error' })
+            }
+        })
     }
 
     return result

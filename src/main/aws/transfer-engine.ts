@@ -17,6 +17,7 @@ let settings: TransferSettings = {
 const queue: TransferJob[] = []
 let activeCount = 0
 const abortControllers = new Map<string, AbortController>()
+const lastEmitTime = new Map<string, number>()
 let progressCallback: ((job: TransferJob) => void) | null = null
 
 /** Maximum number of completed/failed/cancelled jobs to keep in history */
@@ -65,9 +66,17 @@ export function getQueue(): TransferJob[] {
 }
 
 function emitProgress(job: TransferJob): void {
-    if (progressCallback) {
-        progressCallback({ ...job })
+    if (!progressCallback) return
+    const now = Date.now()
+    const isTerminal = job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'
+    if (!isTerminal) {
+        const last = lastEmitTime.get(job.id) || 0
+        if (now - last < 100) return
+    } else {
+        lastEmitTime.delete(job.id)
     }
+    lastEmitTime.set(job.id, now)
+    progressCallback({ ...job })
 }
 
 function processQueue(): void {
