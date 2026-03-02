@@ -24,7 +24,7 @@
     "@aws-sdk/client-sts": "^3.700.0",
     "@aws-sdk/lib-storage": "^3.700.0",
     "@aws-sdk/s3-request-presigner": "^3.700.0",
-    "@tanstack/react-virtual": "^3.11.0",
+    "@tanstack/react-virtual": "^3.13.19",
     "ini": "^6.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
